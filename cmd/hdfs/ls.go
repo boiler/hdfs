@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/colinmarc/hdfs/v2"
 )
@@ -140,16 +139,10 @@ func printLong(tw *tabwriter.Writer, name string, info os.FileInfo, humanReadabl
 	}
 
 	modtime := fi.ModTime()
-	date := modtime.Format("Jan _2")
-	var timeOrYear string
-	if modtime.Year() == time.Now().Year() {
-		timeOrYear = modtime.Format("15:04")
-	} else {
-		timeOrYear = modtime.Format("2006")
-	}
+	date := modtime.Format("2006-01-02 15:04")
 
-	fmt.Fprintf(tw, "%s \t%s \t %s \t %s \t%s \t%s \t%s\n",
-		mode, owner, group, size, date, timeOrYear, name)
+	fmt.Fprintf(tw, "%s \t%s \t %s \t %s \t%s \t%s\n",
+		mode, owner, group, size, date, name)
 }
 
 func lsTabWriter() *tabwriter.Writer {
