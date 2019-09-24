@@ -21,6 +21,7 @@ type Client struct {
 	namenode *rpc.NamenodeConnection
 	defaults *hdfs.FsServerDefaultsProto
 	options  ClientOptions
+	leaseRenewer
 }
 
 // ClientOptions represents the configurable options for a client.
@@ -143,7 +144,17 @@ func NewClient(options ClientOptions) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{namenode: namenode, options: options}, nil
+	ctx, finish := context.WithCancel(context.Background())
+	c := &Client{
+		namenode:     namenode,
+		options:      options,
+		leaseRenewer: leaseRenewer{ctx: ctx, Cancel: finish, errCh: make(chan error)},
+	}
+
+	c.wg.Add(1)
+	go c.leaseRenewerRun()
+
+	return c, nil
 }
 
 // New returns Client connected to the namenode(s) specified by address, or an
@@ -251,5 +262,7 @@ func (c *Client) fetchDefaults() (*hdfs.FsServerDefaultsProto, error) {
 
 // Close terminates all underlying socket connections to remote server.
 func (c *Client) Close() error {
+	c.Cancel()
+	c.wg.Wait()
 	return c.namenode.Close()
 }

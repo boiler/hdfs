@@ -3,6 +3,7 @@ package hdfs
 import (
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
 	hdfs "github.com/colinmarc/hdfs/v2/internal/protocol/hadoop_hdfs"
@@ -69,6 +70,8 @@ func (c *Client) CreateFile(name string, replication int, blockSize int64, perm 
 		return nil, &os.PathError{"create", name, interpretException(err)}
 	}
 
+	atomic.AddUint64(&c.filesWOpen, 1)
+
 	return &FileWriter{
 		client:      c,
 		name:        name,
@@ -104,6 +107,8 @@ func (c *Client) Append(name string) (*FileWriter, error) {
 		replication: int(appendResp.Stat.GetBlockReplication()),
 		blockSize:   int64(appendResp.Stat.GetBlocksize()),
 	}
+
+	atomic.AddUint64(&c.filesWOpen, 1)
 
 	// This returns nil if there are no blocks (it's an empty file) or if the
 	// last block is full (so we have to start a fresh block).
@@ -210,6 +215,9 @@ func (f *FileWriter) Close() error {
 	if f.closed {
 		return io.ErrClosedPipe
 	}
+
+	f.closed = true
+	atomic.AddUint64(&f.client.filesWOpen, ^uint64(0))
 
 	var lastBlock *hdfs.ExtendedBlockProto
 	if f.blockWriter != nil {
