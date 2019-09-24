@@ -1,6 +1,7 @@
 package hdfs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -15,7 +16,8 @@ import (
 const leaseRenewInterval = 30 * time.Second
 
 type leaseRenewer struct {
-	closeCh    chan struct{}
+	ctx        context.Context
+	Cancel     context.CancelFunc
 	errCh      chan error
 	wg         sync.WaitGroup
 	filesWOpen uint64
@@ -51,7 +53,7 @@ func (c *Client) leaseRenewerRun() {
 			if err := c.leaseRenew(); err != nil {
 				fmt.Fprintf(os.Stderr, "hdfs lease renew error: %+v\n", err)
 			}
-		case <-c.closeCh:
+		case <-c.ctx.Done():
 			return
 		}
 	}

@@ -144,10 +144,11 @@ func NewClient(options ClientOptions) (*Client, error) {
 		return nil, err
 	}
 
+	ctx, finish := context.WithCancel(context.Background())
 	c := &Client{
 		namenode:     namenode,
 		options:      options,
-		leaseRenewer: leaseRenewer{closeCh: make(chan struct{}), errCh: make(chan error)},
+		leaseRenewer: leaseRenewer{ctx: ctx, Cancel: finish, errCh: make(chan error)},
 	}
 
 	c.wg.Add(1)
@@ -261,7 +262,7 @@ func (c *Client) fetchDefaults() (*hdfs.FsServerDefaultsProto, error) {
 
 // Close terminates all underlying socket connections to remote server.
 func (c *Client) Close() error {
-	close(c.closeCh)
+	c.Cancel()
 	c.wg.Wait()
 	return c.namenode.Close()
 }
