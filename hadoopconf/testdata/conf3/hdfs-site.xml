@@ -24,8 +24,24 @@
        <value>true</value>
     </property>
     <property>
+        <name>dfs.ha.namenodes.anothercluster</name>
+        <value>nn1,nn2,nn3</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.anothercluster.nn1</name>
+        <value>another-namenode1:8020</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.anothercluster.nn2</name>
+        <value>another-namenode2:8020</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.anothercluster.nn3</name>
+        <value>another-namenode3:8020</value>
+    </property>
+    <property>
         <name>dfs.ha.namenodes.mycluster</name>
-        <value>nn1,nn2</value>
+        <value>nn3,nn1</value>
     </property>
     <property>
         <name>dfs.namenode.rpc-address.mycluster.nn1</name>
@@ -34,5 +50,9 @@
     <property>
         <name>dfs.namenode.rpc-address.mycluster.nn2</name>
         <value>namenode2:8020</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.mycluster.nn3</name>
+        <value>namenode3:8020</value>
     </property>
 </configuration>

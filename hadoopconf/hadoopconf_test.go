@@ -34,4 +34,31 @@ func TestConfFallback(t *testing.T) {
 
 	os.Setenv("HADOOP_HOME", oldHome)
 	os.Setenv("HADOOP_CONF_DIR", oldConfDir)
+
+}
+
+func TestConfNameservices(t *testing.T) {
+	os.Setenv("HADOOP_CONF_DIR", "testdata/conf3")
+
+	conf, err := LoadFromEnvironment()
+	assert.NoError(t, err)
+
+	nsMap := conf.Nameservices()
+	assert.NoError(t, err)
+
+	assert.NotContains(t, nsMap, "anothercluster")
+
+	assert.EqualValues(
+		t,
+		[]string{"defaulthost"},
+		nsMap[""].Namenodes,
+		"default nameservice",
+	)
+
+	assert.EqualValues(
+		t,
+		[]string{"namenode3:8020", "namenode1:8020"},
+		nsMap["mycluster"].Namenodes,
+		"mycluster namenodes",
+	)
 }

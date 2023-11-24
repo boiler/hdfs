@@ -11,10 +11,6 @@ import (
 	"github.com/colinmarc/hdfs/v2"
 )
 
-var (
-	errMultipleNamenodeUrls = errors.New("Multiple namenode URLs specified")
-)
-
 func userDir(client *hdfs.Client) string {
 	return path.Join("/user", client.User())
 }
@@ -23,7 +19,7 @@ func userDir(client *hdfs.Client) string {
 // into absolute ones (by appending /user/<user>). If multiple HDFS urls with
 // differing hosts are passed in, it returns an error.
 func normalizePaths(paths []string) ([]string, string, error) {
-	namenode := ""
+	ns := ""
 	cleanPaths := make([]string, 0, len(paths))
 
 	for _, rawurl := range paths {
@@ -33,17 +29,16 @@ func normalizePaths(paths []string) ([]string, string, error) {
 		}
 
 		if url.Host != "" {
-			if namenode != "" && namenode != url.Host {
-				return nil, "", errMultipleNamenodeUrls
+			if ns != "" && ns != url.Host {
+				return nil, "", errors.New("Multiple nameservice URLs specified")
 			}
-
-			namenode = url.Host
+			ns = url.Host
 		}
 
 		cleanPaths = append(cleanPaths, path.Clean(url.Path))
 	}
 
-	return cleanPaths, namenode, nil
+	return cleanPaths, ns, nil
 }
 
 func getClientAndExpandedPaths(paths []string) ([]string, *hdfs.Client, error) {

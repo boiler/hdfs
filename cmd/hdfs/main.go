@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/user"
-	"strings"
 	"time"
 
 	"github.com/colinmarc/hdfs/v2"
@@ -195,13 +194,13 @@ func fatalWithUsage(msg ...interface{}) {
 	os.Exit(2)
 }
 
-func getClient(namenode string) (*hdfs.Client, error) {
-	if cachedClients[namenode] != nil {
-		return cachedClients[namenode], nil
+func getClient(nameservice string) (*hdfs.Client, error) {
+	if cachedClients[nameservice] != nil {
+		return cachedClients[nameservice], nil
 	}
 
-	if namenode == "" {
-		namenode = os.Getenv("HADOOP_NAMENODE")
+	if nameservice == "" {
+		nameservice = os.Getenv("HADOOP_NAMENODE")
 	}
 
 	conf, err := hadoopconf.LoadFromEnvironment()
@@ -210,8 +209,18 @@ func getClient(namenode string) (*hdfs.Client, error) {
 	}
 
 	options := hdfs.ClientOptionsFromConf(conf)
-	if namenode != "" {
-		options.Addresses = strings.Split(namenode, ",")
+	if nameservice != "" {
+		confNameservices := conf.Nameservices()
+		if _, ok := confNameservices[nameservice]; ok {
+			options.Addresses = confNameservices[nameservice].Namenodes
+		} else {
+			addr := nameservice
+			_, addrPort, _ := net.SplitHostPort(addr)
+			if addrPort == "" {
+				addr = net.JoinHostPort(addr, "8020")
+			}
+			options.Addresses = []string{addr}
+		}
 	}
 
 	if options.Addresses == nil {
@@ -250,6 +259,10 @@ func getClient(namenode string) (*hdfs.Client, error) {
 		return nil, fmt.Errorf("Couldn't connect to namenode: %s", err)
 	}
 
-	cachedClients[namenode] = c
+	cachedClients[nameservice] = c
 	return c, nil
 }
+
+/* func getClient(namenode string) (*hdfs.Client, error) {
+	return getNameserviceClient(namenode, "")
+} */

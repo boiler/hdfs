@@ -9,9 +9,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
+
+type Nameservice struct {
+	Name      string
+	Namenodes []string
+}
 
 type property struct {
 	Name  string `xml:"name"`
@@ -90,43 +94,60 @@ func Load(path string) (HadoopConf, error) {
 	return conf, nil
 }
 
-// Namenodes returns the namenode hosts present in the configuration. The
-// returned slice will be sorted and deduped. The values are loaded from
-// fs.defaultFS (or the deprecated fs.default.name), or fields beginning with
-// dfs.namenode.rpc-address.
-//
-// To handle 'logical' clusters Namenodes will not return any cluster names
-// found in dfs.ha.namenodes.<clustername> properties.
-//
-// If no namenode addresses can befound, Namenodes returns a nil slice.
+// default namenodes
 func (conf HadoopConf) Namenodes() []string {
-	nns := make(map[string]bool)
-	var clusterNames []string
+	nss := conf.Nameservices()
+	return nss[""].Namenodes
+}
+
+// map of configured nameservices with their namenode addresses
+func (conf HadoopConf) Nameservices() map[string]*Nameservice {
+	defaultNameservice := ""
+	nameservices := []string{}
+	nsNamenodes := make(map[string][]string)
+	nsNamenodeAddrs := make(map[string]map[string]string)
 
 	for key, value := range conf {
 		if strings.Contains(key, "fs.default") {
 			nnUrl, _ := url.Parse(value)
-			nns[nnUrl.Host] = true
+			defaultNameservice = nnUrl.Host
+		} else if key == "dfs.nameservices" {
+			nameservices = strings.Split(value, ",")
 		} else if strings.HasPrefix(key, "dfs.namenode.rpc-address.") {
-			nns[value] = true
+			s := strings.Split(key[len("dfs.namenode.rpc-address."):], ".")
+			ns := s[0]
+			nn := s[1]
+			if _, ok := nsNamenodeAddrs[ns]; !ok {
+				nsNamenodeAddrs[ns] = make(map[string]string)
+			}
+			nsNamenodeAddrs[ns][nn] = value
 		} else if strings.HasPrefix(key, "dfs.ha.namenodes.") {
-			clusterNames = append(clusterNames, key[len("dfs.ha.namenodes."):])
+			ns := key[len("dfs.ha.namenodes."):]
+			nsNamenodes[ns] = strings.Split(value, ",")
 		}
 	}
 
-	for _, cn := range clusterNames {
-		delete(nns, cn)
+	rsMap := make(map[string]*Nameservice)
+
+	for _, ns := range nameservices {
+		nnAddrs := []string{}
+		for _, nn := range nsNamenodes[ns] {
+			nnAddrs = append(nnAddrs, nsNamenodeAddrs[ns][nn])
+		}
+		rsMap[ns] = &Nameservice{
+			Name:      ns,
+			Namenodes: nnAddrs,
+		}
 	}
 
-	if len(nns) == 0 {
-		return nil
+	if _, ok := rsMap[defaultNameservice]; ok {
+		rsMap[""] = rsMap[defaultNameservice]
+	} else {
+		rsMap[""] = &Nameservice{
+			Name:      defaultNameservice,
+			Namenodes: []string{defaultNameservice},
+		}
 	}
 
-	keys := make([]string, 0, len(nns))
-	for k, _ := range nns {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	return keys
+	return rsMap
 }
