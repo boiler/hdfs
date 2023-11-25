@@ -1,6 +1,7 @@
 module github.com/colinmarc/hdfs/v2
 
 require (
+	github.com/golang/protobuf v1.5.0
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/pborman/getopt v1.1.0
 	github.com/stretchr/testify v1.8.1

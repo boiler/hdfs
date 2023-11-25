@@ -28,6 +28,7 @@ Valid commands:
   touch [-c] FILE...
   chmod [-R] OCTAL-MODE FILE...
   chown [-R] OWNER[:GROUP] FILE...
+  getfacl [-R] FILE...
   cat SOURCE...
   head [-n LINES | -c BYTES] SOURCE...
   tail [-n LINES | -c BYTES] SOURCE...
@@ -82,6 +83,9 @@ Valid commands:
 	dus    = duOpts.Bool('s')
 	duh    = duOpts.Bool('h')
 
+	getfaclOpts = getopt.New()
+	getfaclR    = getfaclOpts.Bool('R')
+
 	getmergeOpts = getopt.New()
 	getmergen    = getmergeOpts.Bool('n')
 
@@ -101,6 +105,7 @@ func init() {
 	chownOpts.SetUsage(printHelp)
 	headTailOpts.SetUsage(printHelp)
 	duOpts.SetUsage(printHelp)
+	getfaclOpts.SetUsage(printHelp)
 	getmergeOpts.SetUsage(printHelp)
 	dfOpts.SetUsage(printHelp)
 	testOpts.SetUsage(printHelp)
@@ -149,6 +154,9 @@ func main() {
 		checksum(argv[1:])
 	case "get":
 		get(argv[1:])
+	case "getfacl":
+		getfaclOpts.Parse(argv)
+		getfacl(getfaclOpts.Args(), *getfaclR)
 	case "getmerge":
 		getmergeOpts.Parse(argv)
 		getmerge(getmergeOpts.Args(), *getmergen)
