@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 )
 
-func get(args []string) {
+func get(args []string, quiet bool) {
 	if len(args) == 0 || len(args) > 2 {
 		fatalWithUsage()
 	}
@@ -54,7 +54,7 @@ func get(args []string) {
 				fatal(err)
 			}
 		} else {
-			if term.IsTerminal(int(os.Stdout.Fd())) {
+			if !quiet && term.IsTerminal(int(os.Stdout.Fd())) {
 				local, err := os.Create(fullDest)
 				if err != nil {
 					return err

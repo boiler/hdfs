@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"io"
 	"io/fs"
@@ -12,7 +13,7 @@ import (
 	"golang.org/x/term"
 )
 
-func put(args []string, force, preserve, notemp bool) {
+func put(args []string, quiet, force, preserve, notemp bool) {
 	if len(args) != 2 {
 		fatalWithUsage()
 	}
@@ -73,10 +74,15 @@ func put(args []string, force, preserve, notemp bool) {
 			}
 		}
 
+		if force {
+			client.Remove(fullDestTmp)
+		}
+
 		writer, err := client.Create(fullDestTmp)
 		if err != nil {
 			return err
 		}
+		bufWriter := bufio.NewWriter(writer)
 
 		var reader *os.File
 		if source == "-" {
@@ -88,17 +94,18 @@ func put(args []string, force, preserve, notemp bool) {
 			}
 		}
 
-		if term.IsTerminal(int(os.Stdout.Fd())) && source != "-" {
+		if !quiet && term.IsTerminal(int(os.Stdout.Fd())) && source != "-" {
 			bar := progressbar.DefaultBytes(sourceStat.Size(), filepath.Base(fullDest))
-			_, err = io.Copy(io.MultiWriter(writer, bar), reader)
+			_, err = io.Copy(io.MultiWriter(bufWriter, bar), reader)
 		} else {
-			_, err = io.Copy(writer, reader)
+			_, err = io.Copy(bufWriter, reader)
 		}
 		if err != nil {
 			return err
 		}
 
 		reader.Close()
+		bufWriter.Flush()
 		writer.Close()
 
 		hdfsStat, err := client.Stat(fullDestTmp)
@@ -107,14 +114,14 @@ func put(args []string, force, preserve, notemp bool) {
 		}
 
 		if source != "-" && sourceStat.Size() != hdfsStat.Size() {
-			os.Remove(fullDestTmp)
+			client.Remove(fullDestTmp)
 			return errors.New("sizes are different")
 		}
 
 		if source != "-" && preserve {
 			err = client.Chtimes(fullDestTmp, sourceStat.ModTime(), sourceStat.ModTime())
 			if err != nil {
-				os.Remove(fullDestTmp)
+				client.Remove(fullDestTmp)
 				return errors.New("change mtime error")
 			}
 		}

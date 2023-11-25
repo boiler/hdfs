@@ -35,9 +35,10 @@ Valid commands:
   test [-defsz] FILE...
   du [-sh] FILE...
   checksum FILE...
-  get SOURCE [DEST]
+  get [-q] SOURCE [DEST]
   getmerge SOURCE DEST
-  put [-fpd] SOURCE DEST
+  put [-qfpd] SOURCE DEST
+  cp [-qfpd] SOURCE DEST
   df [-h]
   truncate SIZE FILE
 `, os.Args[0])
@@ -83,6 +84,9 @@ Valid commands:
 	dus    = duOpts.Bool('s')
 	duh    = duOpts.Bool('h')
 
+	getOpts = getopt.New()
+	getq    = getOpts.Bool('q')
+
 	getfaclOpts = getopt.New()
 	getfaclR    = getfaclOpts.Bool('R')
 
@@ -93,9 +97,16 @@ Valid commands:
 	dfh    = dfOpts.Bool('h')
 
 	putOpts = getopt.New()
+	putq    = putOpts.Bool('q')
 	putf    = putOpts.Bool('f')
 	putp    = putOpts.Bool('p')
 	putd    = putOpts.Bool('d')
+
+	cpOpts = getopt.New()
+	cpq    = cpOpts.Bool('q')
+	cpf    = cpOpts.Bool('f')
+	cpp    = cpOpts.Bool('p')
+	cpd    = cpOpts.Bool('d')
 
 	cachedClients map[string]*hdfs.Client = make(map[string]*hdfs.Client)
 	status                                = 0
@@ -110,8 +121,11 @@ func init() {
 	chownOpts.SetUsage(printHelp)
 	headTailOpts.SetUsage(printHelp)
 	duOpts.SetUsage(printHelp)
+	getOpts.SetUsage(printHelp)
 	getfaclOpts.SetUsage(printHelp)
 	getmergeOpts.SetUsage(printHelp)
+	putOpts.SetUsage(printHelp)
+	cpOpts.SetUsage(printHelp)
 	dfOpts.SetUsage(printHelp)
 	testOpts.SetUsage(printHelp)
 }
@@ -158,7 +172,7 @@ func main() {
 	case "checksum":
 		checksum(argv[1:])
 	case "get":
-		get(argv[1:])
+		get(getfaclOpts.Args(), *getq)
 	case "getfacl":
 		getfaclOpts.Parse(argv)
 		getfacl(getfaclOpts.Args(), *getfaclR)
@@ -167,7 +181,10 @@ func main() {
 		getmerge(getmergeOpts.Args(), *getmergen)
 	case "put":
 		putOpts.Parse(argv)
-		put(putOpts.Args(), *putf, *putp, *putd)
+		put(putOpts.Args(), *putq, *putf, *putp, *putd)
+	case "cp":
+		cpOpts.Parse(argv)
+		cp(cpOpts.Args(), *cpq, *cpf, *cpp, *cpd)
 	case "df":
 		dfOpts.Parse(argv)
 		df(*dfh)
