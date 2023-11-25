@@ -1,15 +1,18 @@
 package main
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 
-	"github.com/colinmarc/hdfs/v2"
+	"github.com/schollz/progressbar/v3"
+	"golang.org/x/term"
 )
 
-func put(args []string) {
+func put(args []string, force, preserve, notemp bool) {
 	if len(args) != 2 {
 		fatalWithUsage()
 	}
@@ -20,9 +23,21 @@ func put(args []string) {
 	}
 
 	dest := dests[0]
-	source, err := filepath.Abs(args[0])
-	if err != nil {
-		fatal(err)
+	source := args[0]
+
+	if source != "-" {
+		source, err = filepath.Abs(source)
+		if err != nil {
+			fatal(err)
+		}
+	}
+
+	var sourceStat fs.FileInfo
+	if source != "-" {
+		sourceStat, err = os.Stat(source)
+		if err != nil {
+			fatal(err)
+		}
 	}
 
 	client, err := getClient(nn)
@@ -30,89 +45,114 @@ func put(args []string) {
 		fatal(err)
 	}
 
-	if filepath.Base(source) == "-" {
-		putFromStdin(client, dest)
-	} else {
-		putFromFile(client, source, dest)
-	}
-}
-
-func putFromStdin(client *hdfs.Client, dest string) {
-	// If the destination exists, regardless of what it is, bail out.
-	_, err := client.Stat(dest)
-	if err == nil {
-		fatal(&os.PathError{"put", dest, os.ErrExist})
-	} else if !os.IsNotExist(err) {
-		fatal(err)
-	}
-
-	mode := 0755 | os.ModeDir
-	parentDir := filepath.Dir(dest)
-	if parentDir != "." && parentDir != "/" {
-		if err := client.MkdirAll(parentDir, mode); err != nil {
-			fatal(err)
-		}
-	}
-
-	writer, err := client.Create(dest)
-	if err != nil {
-		fatal(err)
-	}
-	defer writer.Close()
-
-	io.Copy(writer, os.Stdin)
-}
-
-func putFromFile(client *hdfs.Client, source string, dest string) {
-	// If the destination is an existing directory, place it inside. Otherwise,
-	// the destination is really the parent directory, and we need to rename the
-	// source directory as we copy.
 	existing, err := client.Stat(dest)
 	if err == nil {
 		if existing.IsDir() {
 			dest = path.Join(dest, filepath.Base(source))
 		} else {
-			fatal(&os.PathError{"mkdir", dest, os.ErrExist})
+			if !force {
+				fatal(&os.PathError{"put", dest, os.ErrExist})
+			}
 		}
 	} else if !os.IsNotExist(err) {
 		fatal(err)
 	}
 
-	mode := 0755 | os.ModeDir
-	err = filepath.Walk(source, func(p string, fi os.FileInfo, err error) error {
+	putFunc := func(src, fullDest string) error {
+		fullDestTmp := fullDest + "._COPYING_"
+		if notemp {
+			fullDestTmp = fullDest
+		}
+
+		_, err = client.Stat(fullDest)
+		if err == nil {
+			if force {
+				client.Remove(fullDest)
+			} else {
+				return errors.New("file already exists")
+			}
+		}
+
+		writer, err := client.Create(fullDestTmp)
 		if err != nil {
 			return err
 		}
 
-		rel, err := filepath.Rel(source, p)
-		if err != nil {
-			return err
-		}
-
-		fullDest := path.Join(dest, rel)
-		if fi.IsDir() {
-			client.Mkdir(fullDest, mode)
+		var reader *os.File
+		if source == "-" {
+			reader = os.Stdin
 		} else {
-			writer, err := client.Create(fullDest)
+			reader, err = os.Open(src)
 			if err != nil {
 				return err
 			}
+		}
 
-			defer writer.Close()
-			reader, err := os.Open(p)
-			if err != nil {
-				return err
-			}
-
-			defer reader.Close()
+		if term.IsTerminal(int(os.Stdout.Fd())) && source != "-" {
+			bar := progressbar.DefaultBytes(sourceStat.Size(), filepath.Base(fullDest))
+			_, err = io.Copy(io.MultiWriter(writer, bar), reader)
+		} else {
 			_, err = io.Copy(writer, reader)
+		}
+		if err != nil {
+			return err
+		}
+
+		reader.Close()
+		writer.Close()
+
+		hdfsStat, err := client.Stat(fullDestTmp)
+		if err != nil {
+			return err
+		}
+
+		if source != "-" && sourceStat.Size() != hdfsStat.Size() {
+			os.Remove(fullDestTmp)
+			return errors.New("sizes are different")
+		}
+
+		if source != "-" && preserve {
+			err = client.Chtimes(fullDestTmp, sourceStat.ModTime(), sourceStat.ModTime())
+			if err != nil {
+				os.Remove(fullDestTmp)
+				return errors.New("change mtime error")
+			}
+		}
+
+		if fullDestTmp != fullDest {
+			err = client.Rename(fullDestTmp, fullDest)
 			if err != nil {
 				return err
 			}
 		}
 
 		return nil
-	})
+	}
+
+	if source == "-" {
+		err = putFunc(source, dest)
+	} else {
+		mode := 0755 | os.ModeDir
+		err = filepath.Walk(source, func(p string, fi os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			rel, err := filepath.Rel(source, p)
+			if err != nil {
+				return err
+			}
+
+			fullDest := path.Join(dest, rel)
+			if fi.IsDir() {
+				client.Mkdir(fullDest, mode)
+			} else {
+				return putFunc(p, fullDest)
+			}
+
+			return nil
+		})
+	}
 
 	if err != nil {
 		fatal(err)

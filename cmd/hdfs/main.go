@@ -37,7 +37,7 @@ Valid commands:
   checksum FILE...
   get SOURCE [DEST]
   getmerge SOURCE DEST
-  put SOURCE DEST
+  put [-fpd] SOURCE DEST
   df [-h]
   truncate SIZE FILE
 `, os.Args[0])
@@ -91,6 +91,11 @@ Valid commands:
 
 	dfOpts = getopt.New()
 	dfh    = dfOpts.Bool('h')
+
+	putOpts = getopt.New()
+	putf    = putOpts.Bool('f')
+	putp    = putOpts.Bool('p')
+	putd    = putOpts.Bool('d')
 
 	cachedClients map[string]*hdfs.Client = make(map[string]*hdfs.Client)
 	status                                = 0
@@ -161,7 +166,8 @@ func main() {
 		getmergeOpts.Parse(argv)
 		getmerge(getmergeOpts.Args(), *getmergen)
 	case "put":
-		put(argv[1:])
+		putOpts.Parse(argv)
+		put(putOpts.Args(), *putf, *putp, *putd)
 	case "df":
 		dfOpts.Parse(argv)
 		df(*dfh)

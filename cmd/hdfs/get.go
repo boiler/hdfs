@@ -7,6 +7,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/schollz/progressbar/v3"
+	"golang.org/x/term"
 )
 
 func get(args []string) {
@@ -51,7 +54,27 @@ func get(args []string) {
 				fatal(err)
 			}
 		} else {
-			err = client.CopyToLocal(p, fullDest)
+			if term.IsTerminal(int(os.Stdout.Fd())) {
+				local, err := os.Create(fullDest)
+				if err != nil {
+					return err
+				}
+				defer local.Close()
+				stat, _ := client.Stat(p)
+				remote, err := client.Open(p)
+				if err != nil {
+					return err
+				}
+				bar := progressbar.DefaultBytes(stat.Size(), filepath.Base(fullDest))
+				_, err = io.Copy(io.MultiWriter(local, bar), remote)
+				if err != nil {
+					remote.Close()
+					return err
+				}
+				err = remote.Close()
+			} else {
+				err = client.CopyToLocal(p, fullDest)
+			}
 			if pathErr, ok := err.(*os.PathError); ok {
 				fatal(pathErr)
 			} else if err != nil {
