@@ -172,7 +172,8 @@ func main() {
 	case "checksum":
 		checksum(argv[1:])
 	case "get":
-		get(getfaclOpts.Args(), *getq)
+		getOpts.Parse(argv)
+		get(getOpts.Args(), *getq)
 	case "getfacl":
 		getfaclOpts.Parse(argv)
 		getfacl(getfaclOpts.Args(), *getfaclR)
