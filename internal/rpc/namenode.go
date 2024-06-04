@@ -23,6 +23,7 @@ const (
 	protocolClassVersion       = 1
 	handshakeCallID            = -3
 	standbyExceptionClass      = "org.apache.hadoop.ipc.StandbyException"
+	stateIDDefault             = 100
 )
 
 const (
@@ -232,8 +233,8 @@ func (c *NamenodeConnection) Execute(method string, req proto.Message, resp prot
 // |  Auth protocol, 1 byte (Auth method None = 0x00)          |
 // +-----------------------------------------------------------+
 //
-//  If the auth protocol is something other than 'none', the authentication
-//  handshake happens here. Otherwise, everything can be sent as one packet.
+//	If the auth protocol is something other than 'none', the authentication
+//	handshake happens here. Otherwise, everything can be sent as one packet.
 //
 // +-----------------------------------------------------------+
 // |  uint32 length of the next two parts                      |
@@ -318,6 +319,7 @@ func newRPCRequestHeader(id int32, clientID []byte) *hadoop.RpcRequestHeaderProt
 		RpcOp:    hadoop.RpcRequestHeaderProto_RPC_FINAL_PACKET.Enum(),
 		CallId:   proto.Int32(id),
 		ClientId: clientID,
+		StateId:  proto.Int64(stateIDDefault),
 	}
 }
 
